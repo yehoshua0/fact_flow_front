@@ -19,7 +19,3 @@ button {
   padding: 5px 10px;
   cursor: pointer;
 }
-
-#ai-score.green { color: green; }
-#ai-score.yellow { color: orange; }
-#ai-score.red { color: red; }
