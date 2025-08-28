@@ -49,6 +49,13 @@ Frontend (extension Chrome) pour la détection de fake news avec FactFlow.
 - [x] Bouton test affichant “Extension Ready!”
 - [x] Injection d’un badge test ou surlignage sur la page web
 
+## Jour 2 ✅
+
+- [ ] Connexion à l’API `/analyze` du backend
+- [ ] Envoi du texte sélectionné ou de l’URL à l’API
+- [ ] Affichage du score dans la popup (🟢🟡🔴)
+- [ ] Badge coloré sur les articles détectés
+
 ---
 
 © 2025

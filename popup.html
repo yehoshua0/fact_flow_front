@@ -2,18 +2,274 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FactFlow</title>
   <link rel="stylesheet" href="popup.css">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=Roboto:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/png" href="./favicon-96x96.png" sizes="96x96" />
+  <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg" />
+  <link rel="shortcut icon" href="./assets/favicon.ico" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./assets/apple-touch-icon.png" />
+  <link rel="manifest" href="./assets/site.webmanifest" />
 </head>
 <body>
-  <div id="app">
-    <img src="/assets/icon.png" alt="FactFlow logo">
-    <h2>FactFlow</h2>
-    <p>FactFlow active.</p>
-    
-    <button type="button" id="ready-btn">Extension ready!</button>
+  <div class="popup-container">
+    <!-- Header -->
+    <header class="popup-header">
+      <div class="logo">
+        <div class="logo-icon"><img src="./assets/icon.png" alt="FactFlow logo" width="30" height="30"></div>
+        <span class="logo-text">FactFlow</span>
+      </div>
+      <div class="status-indicator" id="status-indicator"></div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="analysis" type="button">Analyze</button>
+      <button class="tab-btn" data-tab="profile" type="button">Profile</button>
+    </nav>
+
+    <!-- Analysis Tab Content -->
+    <div class="tab-content" id="analysis-tab">
+      <!-- Initial State - Analyze Button -->
+      <div class="analyze-state" id="analyze-state">
+        <div class="analyze-prompt">
+          <div class="analyze-icon">🔍</div>
+          <h3>Ready to analyze</h3>
+          <p>Click the button below to analyze the current article for reliability and bias.</p>
+        </div>
+        <button type="button" class="analysis-btn" id="analysis-btn">
+          <span class="btn-text">Analyze current article</span>
+          <span class="btn-loader hidden">Analyzing...</span>
+        </button>
+      </div>
+
+      <!-- Loading State -->
+      <div class="loading-state hidden" id="loading-state">
+        <div class="loading-spinner"></div>
+        <p>Analyzing article...</p>
+        <div class="loading-steps">
+          <div class="step active">Extracting content</div>
+          <div class="step">Checking sources</div>
+          <div class="step">Analyzing bias</div>
+          <div class="step">Generating report</div>
+        </div>
+      </div>
+
+      <!-- Results State -->
+      <div class="results-state hidden" id="results-state">
+        <!-- Current Article Status -->
+        <div class="current-status">
+          <div class="status-icon green" id="result-status-icon">🟢</div>
+          <div class="status-text">
+            <span class="status-title" id="result-status-title">Article analyzed</span>
+            <span class="status-subtitle" id="result-status-subtitle">Reliable source detected</span>
+          </div>
+        </div>
+
+        <!-- Analyze Again Button -->
+        <div class="analyze-again">
+          <button type="button" class="analysis-btn secondary" id="analyze-again-btn">
+            Analyze again
+          </button>
+        </div>
+
+        <!-- Score Summary -->
+        <div class="score-summary">
+          <!-- AI score -->
+          <div class="score-item">
+            <span class="score-label">AI</span>
+            <div class="score-bar">
+              <div class="score-fill green" id="ai-score-fill" style="width: 0%"></div>
+            </div>
+            <span class="score-value" id="ai-score-value">0%</span>
+          </div>
+
+          <!-- Community score -->
+          <div class="score-item">
+            <span class="score-label">Community</span>
+            <div class="score-bar">
+              <div class="score-fill green" id="community-score-fill" style="width: 0%"></div>
+            </div>
+            <span class="score-value" id="community-score-value">0%</span>
+          </div>
+
+          <!-- Final results -->
+          <div class="score-item final">
+            <span class="score-label">Final</span>
+            <div class="score-bar">
+              <div class="score-fill green" id="final-score-fill" style="width: 0%"></div>
+            </div>
+            <span class="score-value" id="final-score-value">0%</span>
+          </div>
+        </div>
+
+        <!-- Quick Explanation -->
+        <div class="explanation">
+          <p class="status-title">Details</p>
+          <div class="explanation-items" id="explanation-items">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+
+        <!-- Vote Buttons -->
+        <p class="status-title">Your opinion</p><br/>
+        <div class="vote-section">
+          <button type="button" class="vote-btn vote-up" id="vote-up">
+            <span class="vote-icon">👍</span>
+            <span class="vote-text">Fiable</span>
+            <span class="vote-count" id="vote-up-count">0</span>
+          </button>
+          <button type="button" class="vote-btn vote-down" id="vote-down">
+            <span class="vote-icon">👎</span>
+            <span class="vote-text">Douteux</span>
+            <span class="vote-count" id="vote-down-count">0</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Profile Tab Content -->
+    <div class="tab-content hidden" id="profile-tab">
+      <!-- User Info -->
+      <div class="user-summary">
+        <div class="user-avatar">👤</div>
+        <div class="user-details">
+          <span class="user-name">User #1234</span>
+          <span class="user-level">Beginner</span>
+        </div>
+        <div class="user-points">
+          <span class="points-value">156</span>
+          <span class="points-label">pts</span>
+        </div>
+      </div>
+
+      <!-- Quick Stats -->
+      <div class="stats-compact">
+        <div class="stat-item">
+          <span class="stat-icon">🎯</span>
+          <span class="stat-number">23</span>
+          <span class="stat-label">Verified</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-icon">⭐</span>
+          <span class="stat-number">4.2</span>
+          <span class="stat-label">Reputation</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-icon">🔥</span>
+          <span class="stat-number">7</span>
+          <span class="stat-label">Streak</span>
+        </div>
+      </div>
+
+      <!-- Recent Badges -->
+      <div class="badges-section">
+        <h4>Recent Badges</h4>
+        <div class="badges-list">
+          <span class="badge earned">🎖️ First Vote</span>
+          <span class="badge">📊 Analyst</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="popup-footer">
+      <button type="button" class="footer-btn" id="settings-btn" title="Settings">⚙️</button>
+      <span class="version">v1.0</span>
+      <button type="button" class="footer-btn" id="help-btn" title="Help">?</button>
+    </footer>
   </div>
+
+  <!-- Settings Modal -->
+  <div class="modal hidden" id="settings-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Settings</h3>
+        <button class="modal-close" id="settings-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="setting-item">
+          <label class="setting-label">
+            <input type="checkbox" id="auto-analyze" checked>
+            <span class="checkmark"></span>
+            Auto-analyze articles
+          </label>
+          <p class="setting-description">Automatically analyze articles when you visit a page</p>
+        </div>
+        <div class="setting-item">
+          <label class="setting-label">
+            <input type="checkbox" id="show-notifications">
+            <span class="checkmark"></span>
+            Show notifications
+          </label>
+          <p class="setting-description">Display notifications for analysis results</p>
+        </div>
+        <div class="setting-item">
+          <label class="setting-label">Analysis threshold</label>
+          <input type="range" id="threshold-slider" min="0" max="100" value="70" class="slider">
+          <span class="threshold-value">70%</span>
+          <p class="setting-description">Minimum reliability score to show green indicator</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn secondary" id="settings-reset">Reset to Default</button>
+        <button class="btn primary" id="settings-save">Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Help Modal -->
+  <div class="modal hidden" id="help-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Help & Information</h3>
+        <button class="modal-close" id="help-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="help-section">
+          <h4>🔍 How it works</h4>
+          <p>FactFlow analyzes web articles using AI and community feedback to determine reliability and detect potential bias.</p>
+        </div>
+        <div class="help-section">
+          <h4>📊 Score Breakdown</h4>
+          <ul>
+            <li><strong>AI Score:</strong> Algorithm-based analysis of content quality and source reliability</li>
+            <li><strong>Community Score:</strong> Aggregated votes from other users</li>
+            <li><strong>Final Score:</strong> Weighted combination of both scores</li>
+          </ul>
+        </div>
+        <div class="help-section">
+          <h4>🎯 Indicators</h4>
+          <div class="indicator-guide">
+            <div class="indicator-item">
+              <span class="indicator-color green"></span>
+              <span>70-100%: Highly reliable</span>
+            </div>
+            <div class="indicator-item">
+              <span class="indicator-color yellow"></span>
+              <span>40-69%: Moderately reliable</span>
+            </div>
+            <div class="indicator-item">
+              <span class="indicator-color red"></span>
+              <span>0-39%: Low reliability</span>
+            </div>
+          </div>
+        </div>
+        <div class="help-section">
+          <h4>💡 Tips</h4>
+          <ul>
+            <li>Always cross-reference with multiple sources</li>
+            <li>Consider the publication date and context</li>
+            <li>Vote honestly to help improve community scores</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="popup.js"></script>
 </body>
 </html>
