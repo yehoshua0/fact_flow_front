@@ -1,4 +1,4 @@
-// FactFlow Extension Popup JavaScript - Interactive Version
+// FactFlow Extension Popup JavaScript - Manifest V3 Version
 
 class FactFlowApp {
   constructor() {
@@ -123,8 +123,9 @@ class FactFlowApp {
       // Simulate loading steps
       await this.simulateLoadingSteps();
 
-      // Make API call
+      // Make API call with actual webpage content
       const analysisResult = await this.performAnalysis();
+      console.log("Analysis completed:", analysisResult);
 
       this.analysisData = analysisResult;
       this.setState("results");
@@ -150,23 +151,86 @@ class FactFlowApp {
     }
   }
 
+  // NEW: Get actual webpage content using chrome.scripting API
+  async getCurrentPageContent() {
+    try {
+      const [tab] = await chrome.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
+
+      if (!tab) {
+        throw new Error("No active tab found");
+      }
+
+      const results = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        function: () => {
+          // This function runs in the actual webpage context
+          return {
+            text: document.body.innerText || document.body.textContent || "",
+            title: document.title || "",
+            url: window.location.href || "",
+            domain: window.location.hostname || "",
+            html: document.documentElement.outerHTML.substring(0, 5000), // Limit size
+          };
+        },
+      });
+
+      if (!results || !results[0] || !results[0].result) {
+        throw new Error("Failed to extract page content");
+      }
+
+      return results[0].result;
+    } catch (error) {
+      console.error("Error getting page content:", error);
+
+      // Check if it's a permissions issue
+      if (error.message.includes("Cannot access")) {
+        throw new Error(
+          "Cannot access this page. Try refreshing the page or visiting a different website."
+        );
+      }
+
+      throw new Error("Could not access page content: " + error.message);
+    }
+  }
+
+  // UPDATED: Use actual webpage content instead of extension popup content
   async performAnalysis() {
     try {
+      // Get current active tab content (actual webpage, not extension popup)
+      const pageContent = await this.getCurrentPageContent();
+      console.log("Page content retrieved:", {
+        title: pageContent.title,
+        domain: pageContent.domain,
+        textLength: pageContent.text.length,
+      });
+
+      // Validate content
+      if (!pageContent.text || pageContent.text.trim().length < 50) {
+        throw new Error(
+          "Page content is too short or empty. Please try a different page."
+        );
+      }
+
       const response = await fetch("http://127.0.0.1:8050/analyze", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          url: window.location?.href || "https://example.com/article",
-          text:
-            document.body?.innerText?.substring(0, 1000) ||
-            "Sample article text",
+          text: pageContent.text.substring(0, 2000),
+          title: pageContent.title,
+          url: pageContent.url,
+          domain: pageContent.domain,
         }),
       });
 
       if (!response.ok) {
-        throw new Error(`API Error: ${response.status}`);
+        throw new Error(
+          `API Error: ${response.status} - ${response.statusText}`
+        );
       }
 
       const data = await response.json();
@@ -174,27 +238,30 @@ class FactFlowApp {
       return data;
     } catch (error) {
       console.error("Error during analysis:", error);
-      // Return mock data if API fails
-      return this.getMockAnalysisData();
+
+      // Return mock data if API fails for development
+      if (error.message.includes("fetch")) {
+        console.warn("API unavailable, using mock data for development");
+        return this.getMockAnalysisData();
+      }
+
+      throw error;
     }
   }
 
+  // NEW: Mock data for development when API is unavailable
   getMockAnalysisData() {
     return {
-      ai_score: 85,
-      community_score: 78,
-      final_score: 82,
-      status: "reliable",
-      title: "Article analyzed",
-      subtitle: "Reliable source detected",
-      details: [
-        { type: "positive", text: "Recognized source" },
-        { type: "positive", text: "Verifiable information" },
-        { type: "warning", text: "Catchy headline" },
-      ],
+      score: 0.75,
+      final_score: 0.75,
+      community_score: 0.72,
+      title: "Analysis Complete",
+      subtitle: "Using mock data - API unavailable",
+      explanation:
+        "This is mock data returned because the API server is not available. The actual analysis would provide detailed fact-checking results based on AI analysis and community input.",
       votes: {
-        up: 12,
-        down: 3,
+        up: 42,
+        down: 8,
       },
     };
   }
@@ -202,19 +269,21 @@ class FactFlowApp {
   displayResults(data) {
     // Update status
     document.getElementById("result-status-icon").textContent =
-      this.getStatusIcon(data.final_score);
+      this.getStatusIcon(data.final_score || data.score);
     document.getElementById("result-status-title").textContent =
       data.title || "Article analyzed";
     document.getElementById("result-status-subtitle").textContent =
       data.subtitle || "Analysis complete";
 
     // Update scores with animation
-    this.animateScore("ai-score", data.ai_score);
-    this.animateScore("community-score", data.community_score);
-    this.animateScore("final-score", data.final_score);
+    this.animateScore("ai-score", data.score || 0);
+    this.animateScore("community-score", data.community_score || 0);
+    this.animateScore("final-score", data.final_score || data.score || 0);
 
     // Update explanation
-    this.displayExplanation(data.details || []);
+    this.displayExplanation(
+      data.explanation || "No detailed explanation available."
+    );
 
     // Update vote counts
     document.getElementById("vote-up-count").textContent = data.votes?.up || 0;
@@ -233,20 +302,22 @@ class FactFlowApp {
 
     // Animate width
     setTimeout(() => {
-      fillElement.style.width = `${value}%`;
-      valueElement.textContent = `${value}%`;
+      fillElement.style.width = `${value * 100}%`;
+      valueElement.textContent = `${Math.round(value * 100)}%`;
     }, 100);
   }
 
   getScoreColorClass(score) {
-    if (score >= 70) return "green";
-    if (score >= 40) return "yellow";
+    const percentage = score * 100;
+    if (percentage >= 70) return "green";
+    if (percentage >= 40) return "yellow";
     return "red";
   }
 
   getStatusIcon(score) {
-    if (score >= 70) return "🟢";
-    if (score >= 40) return "🟡";
+    const percentage = score * 100;
+    if (percentage >= 70) return "🟢";
+    if (percentage >= 40) return "🟡";
     return "🔴";
   }
 
@@ -254,41 +325,18 @@ class FactFlowApp {
     const container = document.getElementById("explanation-items");
     container.innerHTML = "";
 
-    details.forEach((detail) => {
-      const item = document.createElement("div");
-      item.className = `explanation-item ${detail.type}`;
-
-      const icon = document.createElement("span");
-      icon.className = "explanation-icon";
-      icon.textContent = this.getExplanationIcon(detail.type);
-
-      const text = document.createElement("span");
-      text.textContent = detail.text;
-
-      item.appendChild(icon);
-      item.appendChild(text);
-      container.appendChild(item);
-    });
-  }
-
-  getExplanationIcon(type) {
-    switch (type) {
-      case "positive":
-        return "✓";
-      case "warning":
-        return "⚠";
-      case "negative":
-        return "✗";
-      default:
-        return "•";
-    }
+    const text = document.createElement("small");
+    text.style.display = "block";
+    text.style.textAlign = "justify";
+    text.style.lineHeight = "1.4";
+    text.style.color = "#666";
+    text.textContent = details;
+    container.appendChild(text);
   }
 
   handleVote(voteType) {
     const upBtn = document.getElementById("vote-up");
     const downBtn = document.getElementById("vote-down");
-    const upCount = document.getElementById("vote-up-count");
-    const downCount = document.getElementById("vote-down-count");
 
     // Remove previous vote styling
     upBtn.classList.remove("voted");
@@ -317,7 +365,7 @@ class FactFlowApp {
       }
     }
 
-    // Send vote to backend (implement as needed)
+    // Send vote to backend
     this.sendVoteToBackend(voteType);
   }
 
@@ -329,23 +377,24 @@ class FactFlowApp {
 
   async sendVoteToBackend(voteType) {
     try {
-      // Implement actual API call here
       console.log("Sending vote:", voteType);
 
-      // Example API call structure:
-      /*
-      const response = await fetch('http://127.0.0.1:8050/vote', {
-        method: 'POST',
+      // Implement actual API call here when ready
+      const response = await fetch("http://127.0.0.1:8050/vote", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           article_id: this.getCurrentArticleId(),
-          vote: voteType === 'up' ? 1 : -1,
-          user_id: this.getCurrentUserId()
-        })
+          vote: voteType === "up" ? 1 : -1,
+          user_id: this.getCurrentUserId(),
+        }),
       });
-      */
+
+      if (response.ok) {
+        console.log("Vote sent successfully");
+      }
     } catch (error) {
       console.error("Error sending vote:", error);
     }
@@ -384,20 +433,31 @@ class FactFlowApp {
   }
 
   handleAnalysisError(error) {
-    console.log(error);
+    console.error("Analysis error:", error);
     this.setState("analyze");
 
-    // Show error message (you could implement a toast notification here)
+    // Show error message
     const btn = document.getElementById("analysis-btn");
     const originalText = btn.querySelector(".btn-text").textContent;
 
-    btn.querySelector(".btn-text").textContent = "Analysis failed - Try again";
+    let errorMessage = "Analysis failed - Try again";
+
+    // Customize error message based on error type
+    if (error.message.includes("Cannot access")) {
+      errorMessage = "Cannot access this page";
+    } else if (error.message.includes("too short")) {
+      errorMessage = "Page content too short";
+    } else if (error.message.includes("API Error")) {
+      errorMessage = "Server error - Try again";
+    }
+
+    btn.querySelector(".btn-text").textContent = errorMessage;
     btn.style.backgroundColor = "#f44336";
 
     setTimeout(() => {
       btn.querySelector(".btn-text").textContent = originalText;
       btn.style.backgroundColor = "";
-    }, 3000);
+    }, 4000);
   }
 
   // Modal functionality
@@ -421,8 +481,8 @@ class FactFlowApp {
 
   // Settings functionality
   loadSettings() {
-    // Load from chrome.storage or localStorage
-    // For demo, we'll use default values
+    // Load from chrome.storage in a real extension
+    // For now, use defaults
     this.applySettings();
   }
 
@@ -443,13 +503,11 @@ class FactFlowApp {
       document.getElementById("threshold-slider").value
     );
 
-    // Save to chrome.storage or localStorage
+    // Save to chrome.storage in a real extension
     // chrome.storage.sync.set({ factflowSettings: this.settings });
 
     console.log("Settings saved:", this.settings);
     this.closeModal("settings-modal");
-
-    // Show confirmation (implement toast notification if needed)
     this.showSettingsSavedFeedback();
   }
 
@@ -487,8 +545,7 @@ class FactFlowApp {
   }
 
   isValidPage() {
-    // Check if current page is suitable for analysis
-    // For demo, we'll return true
+    // In a real extension, you might check the URL or page type
     return true;
   }
 
@@ -498,19 +555,28 @@ class FactFlowApp {
   }
 
   getCurrentArticleId() {
-    // Generate or get article identifier
-    return window.location?.href
-      ? btoa(window.location.href).substring(0, 10)
-      : "demo_article";
+    // Generate article identifier based on URL
+    try {
+      const url = this.analysisData?.url || window.location.href;
+      return btoa(url).substring(0, 12);
+    } catch {
+      return "demo_article";
+    }
   }
 
   getCurrentUserId() {
-    // Get user identifier from storage or generate one
+    // In a real extension, you'd get this from storage or generate/store it
     return "user_" + Math.random().toString(36).substring(2, 8);
   }
 }
 
 // Initialize the app when DOM is loaded
 document.addEventListener("DOMContentLoaded", function () {
-  window.factFlowApp = new FactFlowApp();
+  // Check if we have the necessary Chrome APIs
+  if (typeof chrome !== "undefined" && chrome.tabs && chrome.scripting) {
+    window.factFlowApp = new FactFlowApp();
+  } else {
+    console.error("Chrome extension APIs not available");
+    // You might want to show an error message to the user here
+  }
 });

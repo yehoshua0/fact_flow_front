@@ -51,10 +51,35 @@ Frontend (extension Chrome) pour la détection de fake news avec FactFlow.
 
 ## Jour 2 ✅
 
-- [ ] Connexion à l’API `/analyze` du backend
-- [ ] Envoi du texte sélectionné ou de l’URL à l’API
-- [ ] Affichage du score dans la popup (🟢🟡🔴)
-- [ ] Badge coloré sur les articles détectés
+- [x] Connexion à l’API `/analyze` du backend
+- [x] Envoi du texte sélectionné ou de l’URL à l’API
+- [x] Affichage du score dans la popup (🟢🟡🔴)
+- [x] Badge coloré sur les articles détectés
+
+## Jour 3
+
+- [ ] Boutons “Fiable” 👍 et “Douteux” dans la popup
+- [ ] Envoi du vote à l’API `/vote` du backend
+- [ ] Mise à jour en temps réel du score communauté dans la popup
+- [ ] Affichage : score AI, score communauté, score final combiné
+- [ ] Boutons interactifs qui modifient la base
+
+## Jour 4
+
+- [ ] Affichage des explications détaillées renvoyées par `/analyze`
+- [ ] Ajout d’un onglet “Mon Profil” dans la popup (points + réputation)
+- [ ] UI améliorée : icônes et couleurs cohérentes (🟢🟡🔴)
+- [ ] Onglet profil avec compteur de points
+- [ ] Meilleure ergonomie (couleurs + design simple)
+
+## Jour 5
+
+- [ ] Tests complets avec backend en conditions réelles
+- [ ] Gestion CORS + sécurisation (clé API dans headers)
+- [ ] Nettoyage du code et préparation démo finale
+- [ ] Extension prête pour Chrome/Firefox
+- [ ] Démo complète (analyse, score, explication, votes en direct)
+- [ ] Documentation rapide (README + capture écran)
 
 ---
 

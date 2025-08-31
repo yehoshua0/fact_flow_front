@@ -137,12 +137,12 @@
       <div class="user-summary">
         <div class="user-avatar">👤</div>
         <div class="user-details">
-          <span class="user-name">User #1234</span>
+          <span class="user-name">User #1</span>
           <span class="user-level">Beginner</span>
         </div>
         <div class="user-points">
-          <span class="points-value">156</span>
-          <span class="points-label">pts</span>
+          <span class="points-value">0</span>
+          <span class="points-label">pt(s)</span>
         </div>
       </div>
 
@@ -150,17 +150,17 @@
       <div class="stats-compact">
         <div class="stat-item">
           <span class="stat-icon">🎯</span>
-          <span class="stat-number">23</span>
+          <span class="stat-number">0</span>
           <span class="stat-label">Verified</span>
         </div>
         <div class="stat-item">
           <span class="stat-icon">⭐</span>
-          <span class="stat-number">4.2</span>
+          <span class="stat-number">0</span>
           <span class="stat-label">Reputation</span>
         </div>
         <div class="stat-item">
           <span class="stat-icon">🔥</span>
-          <span class="stat-number">7</span>
+          <span class="stat-number">0</span>
           <span class="stat-label">Streak</span>
         </div>
       </div>
@@ -169,7 +169,7 @@
       <div class="badges-section">
         <h4>Recent Badges</h4>
         <div class="badges-list">
-          <span class="badge earned">🎖️ First Vote</span>
+          <span class="badge">🎖️ First Vote</span>
           <span class="badge">📊 Analyst</span>
         </div>
       </div>
@@ -188,8 +188,9 @@
     <div class="modal-content">
       <div class="modal-header">
         <h3>Settings</h3>
-        <button class="modal-close" id="settings-close">&times;</button>
+        <button class="modal-close" id="settings-close" type="button">&times;</button>
       </div>
+
       <div class="modal-body">
         <div class="setting-item">
           <label class="setting-label">
@@ -199,6 +200,7 @@
           </label>
           <p class="setting-description">Automatically analyze articles when you visit a page</p>
         </div>
+
         <div class="setting-item">
           <label class="setting-label">
             <input type="checkbox" id="show-notifications">
@@ -207,6 +209,7 @@
           </label>
           <p class="setting-description">Display notifications for analysis results</p>
         </div>
+
         <div class="setting-item">
           <label class="setting-label">Analysis threshold</label>
           <input type="range" id="threshold-slider" min="0" max="100" value="70" class="slider">
@@ -214,9 +217,10 @@
           <p class="setting-description">Minimum reliability score to show green indicator</p>
         </div>
       </div>
+
       <div class="modal-footer">
-        <button class="btn secondary" id="settings-reset">Reset to Default</button>
-        <button class="btn primary" id="settings-save">Save Changes</button>
+        <button class="btn secondary" id="settings-reset" type="button">Reset to Default</button>
+        <button class="btn primary" id="settings-save" type="button">Save Changes</button>
       </div>
     </div>
   </div>
@@ -226,13 +230,15 @@
     <div class="modal-content">
       <div class="modal-header">
         <h3>Help & Information</h3>
-        <button class="modal-close" id="help-close">&times;</button>
+        <button class="modal-close" id="help-close" type="button">&times;</button>
       </div>
+
       <div class="modal-body">
         <div class="help-section">
           <h4>🔍 How it works</h4>
           <p>FactFlow analyzes web articles using AI and community feedback to determine reliability and detect potential bias.</p>
         </div>
+
         <div class="help-section">
           <h4>📊 Score Breakdown</h4>
           <ul>
@@ -241,6 +247,7 @@
             <li><strong>Final Score:</strong> Weighted combination of both scores</li>
           </ul>
         </div>
+
         <div class="help-section">
           <h4>🎯 Indicators</h4>
           <div class="indicator-guide">
@@ -258,6 +265,7 @@
             </div>
           </div>
         </div>
+        
         <div class="help-section">
           <h4>💡 Tips</h4>
           <ul>
