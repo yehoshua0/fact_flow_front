@@ -74,12 +74,12 @@ Frontend (extension Chrome) pour la détection de fake news avec FactFlow.
 
 ## Jour 5
 
-- [ ] Tests complets avec backend en conditions réelles
-- [ ] Gestion CORS + sécurisation (clé API dans headers)
-- [ ] Nettoyage du code et préparation démo finale
-- [ ] Extension prête pour Chrome/Firefox
-- [ ] Démo complète (analyse, score, explication, votes en direct)
-- [ ] Documentation rapide (README + capture écran)
+- [x] Tests complets avec backend en conditions réelles
+- [x] Gestion CORS + sécurisation (clé API dans headers)
+- [x] Nettoyage du code et préparation démo finale
+- [x] Extension prête pour Chrome/Firefox
+- [x] Démo complète (analyse, score, explication, votes en direct)
+- [x] Documentation rapide (README + capture écran)
 
 ---
 

@@ -11,7 +11,7 @@ class FactFlowApp {
       showNotifications: false,
       threshold: 70,
     };
-    this.apiBaseUrl = "http://127.0.0.1:8050";
+    this.apiBaseUrl = "https://fact-flow-back.onrender.com/"; //"http://127.0.0.1:8050";
 
     this.init();
   }
@@ -527,17 +527,62 @@ class FactFlowApp {
     document.getElementById("stat-streak").textContent =
       this.currentUser.streak;
 
-    // Set user avatar (initials from username)
+    // Set user avatar - use profile photo if available, otherwise initials
     const avatar = document.getElementById("user-avatar");
-    avatar.textContent = this.currentUser.username.charAt(0).toUpperCase();
+    if (this.currentUser.profile_photo) {
+      // Create img element for profile photo
+      avatar.innerHTML = `<img src="${this.currentUser.profile_photo}" alt="Profile" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;">`;
+    } else {
+      // Use initials as fallback
+      avatar.textContent = this.currentUser.username.charAt(0).toUpperCase();
+    }
 
     // Display badges if any
     this.displayUserBadges(this.currentUser.badges || []);
   }
 
   displayUserBadges(badges) {
-    // Could add a badges display area in the profile tab
-    console.log("User badges:", badges);
+    const badgesContainer = document.getElementById("user-badges-container");
+
+    if (!badgesContainer) {
+      console.log("User badges:", badges);
+      return;
+    }
+
+    badgesContainer.innerHTML = "";
+
+    if (!badges || badges.length === 0) {
+      badgesContainer.innerHTML =
+        '<span class="no-badges">No badges yet</span>';
+      return;
+    }
+
+    badges.forEach((badge) => {
+      const badgeEl = document.createElement("div");
+      badgeEl.className = "user-badge";
+
+      // Map badge names to display info
+      const badgeInfo = this.getBadgeInfo(badge);
+      badgeEl.innerHTML = `
+        <span class="badge-icon">${badgeInfo.icon}</span>
+        <span class="badge-name">${badgeInfo.name}</span>
+      `;
+
+      badgesContainer.appendChild(badgeEl);
+    });
+  }
+
+  getBadgeInfo(badge) {
+    const badgeMap = {
+      first_vote: { icon: "🗳️", name: "First Vote" },
+      analyst: { icon: "📊", name: "Analyst" },
+      fact_checker: { icon: "✅", name: "Fact Checker" },
+      trusted_user: { icon: "⭐", name: "Trusted User" },
+      power_voter: { icon: "💪", name: "Power Voter" },
+      streak_master: { icon: "🔥", name: "Streak Master" },
+    };
+
+    return badgeMap[badge] || { icon: "🏆", name: badge.replace("_", " ") };
   }
 
   loadInitialState() {
@@ -890,25 +935,33 @@ class FactFlowApp {
   async submitVote(voteType, articleId) {
     const token = await this.getStorageData("factflow_token");
 
-    // Note: The API specification doesn't include a vote endpoint
-    // This would need to be added to the backend API
     const voteData = {
+      user_id: this.currentUser.user_id,
       article_id: articleId,
-      vote_type: voteType === "up" ? "positive" : "negative",
+      vote: voteType === "up" ? 1 : 0, // 1 for upvote, 0 for downvote
     };
 
-    // For now, just log the vote since the API endpoint isn't specified
-    console.log("Would submit vote:", voteData);
+    const response = await fetch(`${this.apiBaseUrl}/vote`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(voteData),
+    });
 
-    // If there was a vote endpoint, it would look like:
-    // const response = await fetch(`${this.apiBaseUrl}/article/${articleId}/vote`, {
-    //   method: "POST",
-    //   headers: {
-    //     "Content-Type": "application/json",
-    //     "Authorization": `Bearer ${token}`,
-    //   },
-    //   body: JSON.stringify(voteData),
-    // });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || "Vote submission failed");
+    }
+
+    const result = await response.text();
+    console.log("Vote submitted successfully:", result);
+
+    // Award points and update user data after successful vote
+    await this.updateUserAfterVote();
+
+    return result;
   }
 
   updateLocalVoteCounts(voteType, previousVote) {
@@ -934,6 +987,69 @@ class FactFlowApp {
 
     upCountEl.textContent = upCount;
     downCountEl.textContent = downCount;
+  }
+
+  async updateUserAfterVote() {
+    try {
+      // Refresh current user data to get updated points, badges, etc.
+      const updatedUser = await this.getCurrentUser();
+      if (updatedUser) {
+        const oldUser = { ...this.currentUser };
+        this.currentUser = updatedUser;
+        this.loadUserData();
+
+        // Check for new badges or achievements
+        this.checkForNewAchievements(updatedUser, oldUser);
+      }
+    } catch (error) {
+      console.error("Failed to update user after vote:", error);
+    }
+  }
+
+  checkForNewAchievements(updatedUser, oldUser) {
+    // Check if user earned their first vote badge
+    if (
+      updatedUser.badges &&
+      updatedUser.badges.includes("first_vote") &&
+      (!oldUser.badges || !oldUser.badges.includes("first_vote"))
+    ) {
+      this.showTemporaryMessage("Achievement unlocked: First Vote!", "success");
+    }
+
+    // Check if user became verified (has voted on articles)
+    if (updatedUser.is_verified && !oldUser.is_verified) {
+      this.showTemporaryMessage("You are now a verified user!", "success");
+    }
+
+    // Check for analyst badge (after 10 days login streak)
+    if (
+      updatedUser.badges &&
+      updatedUser.badges.includes("analyst") &&
+      (!oldUser.badges || !oldUser.badges.includes("analyst"))
+    ) {
+      this.showTemporaryMessage(
+        "Achievement unlocked: Analyst Badge!",
+        "success"
+      );
+    }
+
+    // Check for other potential badges
+    if (
+      updatedUser.badges &&
+      updatedUser.badges.includes("fact_checker") &&
+      (!oldUser.badges || !oldUser.badges.includes("fact_checker"))
+    ) {
+      this.showTemporaryMessage(
+        "Achievement unlocked: Fact Checker!",
+        "success"
+      );
+    }
+
+    // Show points gained
+    if (updatedUser.points > oldUser.points) {
+      const pointsGained = updatedUser.points - oldUser.points;
+      this.showTemporaryMessage(`+${pointsGained} points earned!`, "success");
+    }
   }
 
   resetToAnalyzeState() {
@@ -968,7 +1084,65 @@ class FactFlowApp {
       this.currentUser.username;
     document.getElementById("edit-email").value = this.currentUser.email;
 
+    // Set up profile photo upload functionality
+    this.setupProfilePhotoUpload();
+
     this.openModal("edit-profile-modal");
+  }
+
+  setupProfilePhotoUpload() {
+    const photoInput = document.getElementById("profile-photo-input");
+    const photoPreview = document.getElementById("photo-preview");
+    const uploadBtn = document.getElementById("upload-photo-btn");
+
+    if (!photoInput || !photoPreview || !uploadBtn) return;
+
+    // Set current photo if exists
+    if (this.currentUser.profile_photo) {
+      photoPreview.src = this.currentUser.profile_photo;
+      photoPreview.classList.remove("hidden");
+    }
+
+    // Handle file selection
+    photoInput.addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        // Validate file
+        if (!this.validatePhotoFile(file)) {
+          return;
+        }
+
+        // Show preview
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          photoPreview.src = e.target.result;
+          photoPreview.classList.remove("hidden");
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    // Handle upload button click
+    uploadBtn.addEventListener("click", () => {
+      photoInput.click();
+    });
+  }
+
+  validatePhotoFile(file) {
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
+
+    if (file.size > maxSize) {
+      alert("File size must be less than 5MB");
+      return false;
+    }
+
+    if (!allowedTypes.includes(file.type)) {
+      alert("Only JPEG, PNG, and GIF files are allowed");
+      return false;
+    }
+
+    return true;
   }
 
   openChangePasswordModal() {
@@ -987,7 +1161,33 @@ class FactFlowApp {
       return;
     }
 
+    const saveBtn = document.getElementById("edit-profile-save");
+    this.setButtonLoading(saveBtn, true);
+
     try {
+      // First, handle photo upload if a new photo was selected
+      const photoInput = document.getElementById("profile-photo-input");
+      let newProfilePhoto = this.currentUser.profile_photo || "";
+
+      if (photoInput && photoInput.files && photoInput.files[0]) {
+        try {
+          const uploadResult = await this.uploadProfilePhoto(
+            photoInput.files[0]
+          );
+          if (uploadResult) {
+            // Get the updated user data which should include the new photo URL
+            const updatedUser = await this.getCurrentUser();
+            if (updatedUser && updatedUser.profile_photo) {
+              newProfilePhoto = updatedUser.profile_photo;
+            }
+          }
+        } catch (error) {
+          console.error("Photo upload failed:", error);
+          alert("Failed to upload photo, but profile will still be updated");
+        }
+      }
+
+      // Update profile with username and photo
       const token = await this.getStorageData("factflow_token");
       const response = await fetch(`${this.apiBaseUrl}/users/me`, {
         method: "PUT",
@@ -997,7 +1197,7 @@ class FactFlowApp {
         },
         body: JSON.stringify({
           username: newUsername,
-          profile_photo: this.currentUser.profile_photo || "",
+          profile_photo: newProfilePhoto,
         }),
       });
 
@@ -1006,8 +1206,7 @@ class FactFlowApp {
         this.currentUser = updatedUser;
         this.loadUserData();
         this.closeModal("edit-profile-modal");
-        // Show success message
-        alert("Profile updated successfully");
+        this.showTemporaryMessage("Profile updated successfully", "success");
       } else {
         const error = await response.json();
         alert(error.detail || "Failed to update profile");
@@ -1015,6 +1214,8 @@ class FactFlowApp {
     } catch (error) {
       console.error("Profile update failed:", error);
       alert("Network error. Please try again.");
+    } finally {
+      this.setButtonLoading(saveBtn, false);
     }
   }
 
@@ -1128,6 +1329,57 @@ class FactFlowApp {
     }
   }
 
+  // Photo Upload Methods
+  async uploadProfilePhoto(file) {
+    try {
+      const token = await this.getStorageData("factflow_token");
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch(`${this.apiBaseUrl}/users/me/upload-photo`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          // Don't set Content-Type header - let browser set it for FormData
+        },
+        body: formData,
+      });
+
+      if (response.ok) {
+        const result = await response.text();
+        console.log("Photo uploaded successfully:", result);
+        return true;
+      } else {
+        const error = await response.json();
+        throw new Error(error.detail || "Upload failed");
+      }
+    } catch (error) {
+      console.error("Photo upload failed:", error);
+      throw error;
+    }
+  }
+
+  // User Profile Methods
+  async getCurrentUser() {
+    try {
+      const token = await this.getStorageData("factflow_token");
+      const response = await fetch(`${this.apiBaseUrl}/users/me`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        return await response.json();
+      }
+      return null;
+    } catch (error) {
+      console.error("Failed to get current user:", error);
+      return null;
+    }
+  }
+
   // Utility Methods
   isValidEmail(email) {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -1215,70 +1467,6 @@ class FactFlowApp {
     this.hideAuthMessage();
   }
 
-  // Error Handling
-  handleApiError(error, response) {
-    if (response && response.status === 401) {
-      // Unauthorized - token might be expired
-      this.handleSignOut();
-      return;
-    }
-
-    console.error("API Error:", error);
-    throw error;
-  }
-
-  // Photo Upload (for future implementation)
-  async uploadProfilePhoto(file) {
-    try {
-      const token = await this.getStorageData("factflow_token");
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const response = await fetch(`${this.apiBaseUrl}/users/me/upload-photo`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: formData,
-      });
-
-      if (response.ok) {
-        // Refresh user data
-        const updatedUser = await this.getCurrentUser();
-        if (updatedUser) {
-          this.currentUser = updatedUser;
-          this.loadUserData();
-        }
-        return true;
-      } else {
-        throw new Error("Upload failed");
-      }
-    } catch (error) {
-      console.error("Photo upload failed:", error);
-      throw error;
-    }
-  }
-
-  async getCurrentUser() {
-    try {
-      const token = await this.getStorageData("factflow_token");
-      const response = await fetch(`${this.apiBaseUrl}/users/me`, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        return await response.json();
-      }
-      return null;
-    } catch (error) {
-      console.error("Failed to get current user:", error);
-      return null;
-    }
-  }
-
   // Auto-analysis for new pages
   async handlePageChange() {
     if (
@@ -1302,11 +1490,211 @@ class FactFlowApp {
     this.updateStatusIndicator("active");
     this.showTemporaryMessage("Connection restored", "success");
   }
+
+  // Error Handling
+  handleApiError(error, response) {
+    if (response && response.status === 401) {
+      // Unauthorized - token might be expired
+      this.handleSignOut();
+      return;
+    }
+
+    console.error("API Error:", error);
+    throw error;
+  }
+
+  // Login Streak and Reputation Management
+  async updateLoginStreak() {
+    try {
+      const lastLogin = await this.getStorageData("factflow_last_login");
+      const today = new Date().toDateString();
+
+      if (lastLogin !== today) {
+        // Update login streak
+        await this.setStorageData("factflow_last_login", today);
+
+        // Refresh user data to get updated streak
+        const updatedUser = await this.getCurrentUser();
+        if (updatedUser) {
+          this.currentUser = updatedUser;
+          this.loadUserData();
+
+          // Check for streak achievements
+          if (
+            updatedUser.streak >= 10 &&
+            updatedUser.badges &&
+            updatedUser.badges.includes("analyst")
+          ) {
+            this.showTemporaryMessage(
+              "Daily login streak maintained!",
+              "success"
+            );
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Failed to update login streak:", error);
+    }
+  }
+
+  // Daily login tracking
+  async trackDailyLogin() {
+    try {
+      const today = new Date().toDateString();
+      const lastLogin = await this.getStorageData("factflow_last_login");
+
+      if (lastLogin !== today) {
+        await this.setStorageData("factflow_last_login", today);
+
+        // Could call an API endpoint to update server-side streak
+        // This would increment the user's streak count
+        const token = await this.getStorageData("factflow_token");
+
+        try {
+          await fetch(`${this.apiBaseUrl}/users/me/daily-login`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          });
+        } catch (error) {
+          console.error("Failed to track daily login:", error);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to track daily login:", error);
+    }
+  }
+
+  // Article vote history
+  async loadUserVoteHistory() {
+    try {
+      const token = await this.getStorageData("factflow_token");
+      const response = await fetch(`${this.apiBaseUrl}/users/me/votes`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const voteHistory = await response.json();
+        this.displayVoteHistory(voteHistory);
+      }
+    } catch (error) {
+      console.error("Failed to load vote history:", error);
+    }
+  }
+
+  displayVoteHistory(voteHistory) {
+    const historyContainer = document.getElementById("vote-history-container");
+
+    if (!historyContainer) return;
+
+    historyContainer.innerHTML = "";
+
+    if (!voteHistory || voteHistory.length === 0) {
+      historyContainer.innerHTML =
+        '<p class="no-history">No vote history yet</p>';
+      return;
+    }
+
+    voteHistory.forEach((vote) => {
+      const voteEl = document.createElement("div");
+      voteEl.className = "vote-history-item";
+
+      const voteIcon = vote.vote === 1 ? "👍" : "👎";
+      const voteText = vote.vote === 1 ? "Upvoted" : "Downvoted";
+
+      voteEl.innerHTML = `
+        <div class="vote-icon">${voteIcon}</div>
+        <div class="vote-details">
+          <div class="vote-action">${voteText}</div>
+          <div class="vote-date">${new Date(
+            vote.created_at
+          ).toLocaleDateString()}</div>
+        </div>
+      `;
+
+      historyContainer.appendChild(voteEl);
+    });
+  }
+
+  // Community features
+  async loadCommunityStats() {
+    try {
+      const response = await fetch(`${this.apiBaseUrl}/community/stats`);
+
+      if (response.ok) {
+        const stats = await response.json();
+        this.displayCommunityStats(stats);
+      }
+    } catch (error) {
+      console.error("Failed to load community stats:", error);
+    }
+  }
+
+  displayCommunityStats(stats) {
+    const statsContainer = document.getElementById("community-stats");
+
+    if (!statsContainer) return;
+
+    statsContainer.innerHTML = `
+      <div class="stat-item">
+        <div class="stat-value">${stats.total_articles || 0}</div>
+        <div class="stat-label">Articles Analyzed</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value">${stats.total_votes || 0}</div>
+        <div class="stat-label">Community Votes</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value">${stats.active_users || 0}</div>
+        <div class="stat-label">Active Users</div>
+      </div>
+    `;
+  }
+
+  // Enhanced initialization
+  async initializeApp() {
+    await this.trackDailyLogin();
+    await this.updateLoginStreak();
+
+    // Load community stats in background
+    this.loadCommunityStats();
+
+    // Set up periodic updates
+    this.setupPeriodicUpdates();
+  }
+
+  setupPeriodicUpdates() {
+    // Update user data every 5 minutes
+    setInterval(async () => {
+      if (this.currentUser) {
+        const updatedUser = await this.getCurrentUser();
+        if (updatedUser) {
+          const oldUser = { ...this.currentUser };
+          this.currentUser = updatedUser;
+          this.loadUserData();
+          this.checkForNewAchievements(updatedUser, oldUser);
+        }
+      }
+    }, 5 * 60 * 1000);
+
+    // Update community stats every 10 minutes
+    setInterval(() => {
+      this.loadCommunityStats();
+    }, 10 * 60 * 1000);
+  }
 }
 
 // Initialize the app when DOM is loaded
 document.addEventListener("DOMContentLoaded", () => {
   const app = new FactFlowApp();
+
+  // Enhanced initialization
+  app.initializeApp();
 
   // Listen for page changes if in extension environment
   if (typeof chrome !== "undefined" && chrome.tabs) {
@@ -1320,6 +1708,21 @@ document.addEventListener("DOMContentLoaded", () => {
   // Handle network status
   window.addEventListener("online", () => app.handleNetworkRestore());
   window.addEventListener("offline", () => app.handleNetworkError());
+
+  // Handle page visibility changes
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && app.currentUser) {
+      // Page became visible, refresh user data
+      app.getCurrentUser().then((user) => {
+        if (user) {
+          const oldUser = { ...app.currentUser };
+          app.currentUser = user;
+          app.loadUserData();
+          app.checkForNewAchievements(user, oldUser);
+        }
+      });
+    }
+  });
 });
 
 // Export for testing
