@@ -58,19 +58,19 @@ Frontend (extension Chrome) pour la détection de fake news avec FactFlow.
 
 ## Jour 3
 
-- [ ] Boutons “Fiable” 👍 et “Douteux” dans la popup
-- [ ] Envoi du vote à l’API `/vote` du backend
-- [ ] Mise à jour en temps réel du score communauté dans la popup
-- [ ] Affichage : score AI, score communauté, score final combiné
-- [ ] Boutons interactifs qui modifient la base
+- [x] Boutons “Fiable” 👍 et “Douteux” dans la popup
+- [x] Envoi du vote à l’API `/vote` du backend
+- [x] Mise à jour en temps réel du score communauté dans la popup
+- [x] Affichage : score AI, score communauté, score final combiné
+- [x] Boutons interactifs qui modifient la base
 
 ## Jour 4
 
-- [ ] Affichage des explications détaillées renvoyées par `/analyze`
-- [ ] Ajout d’un onglet “Mon Profil” dans la popup (points + réputation)
-- [ ] UI améliorée : icônes et couleurs cohérentes (🟢🟡🔴)
-- [ ] Onglet profil avec compteur de points
-- [ ] Meilleure ergonomie (couleurs + design simple)
+- [x] Affichage des explications détaillées renvoyées par `/analyze`
+- [x] Ajout d’un onglet “Mon Profil” dans la popup (points + réputation)
+- [x] UI améliorée : icônes et couleurs cohérentes (🟢🟡🔴)
+- [x] Onglet profil avec compteur de points
+- [x] Meilleure ergonomie (couleurs + design simple)
 
 ## Jour 5
 
@@ -82,5 +82,10 @@ Frontend (extension Chrome) pour la détection de fake news avec FactFlow.
 - [ ] Documentation rapide (README + capture écran)
 
 ---
+
+🥇 FactFlow
+Why? Short, modern, dynamic. Suggests a smooth “flow” of reliable information.
+
+Pitch line: “FactFlow keeps your news clean by filtering misinformation in real time.”
 
 © 2025

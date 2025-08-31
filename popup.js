@@ -1,26 +1,239 @@
-// FactFlow Extension Popup JavaScript - Manifest V3 Version
+// FactFlow Extension Popup JavaScript - Manifest V3 Version with API Integration
 
 class FactFlowApp {
   constructor() {
     this.currentState = "analyze"; // analyze, loading, results
     this.analysisData = null;
     this.userVote = null; // 'up', 'down', or null
+    this.currentUser = null; // User authentication state
     this.settings = {
       autoAnalyze: true,
       showNotifications: false,
       threshold: 70,
     };
+    this.apiBaseUrl = "http://127.0.0.1:8050";
 
     this.init();
   }
 
   init() {
-    this.setupEventListeners();
     this.loadSettings();
-    this.loadInitialState();
+    this.checkAuthState();
+    this.setupEventListeners();
+  }
+
+  // Storage Methods
+  async getStorageData(key) {
+    try {
+      if (
+        typeof chrome !== "undefined" &&
+        chrome.storage &&
+        chrome.storage.local
+      ) {
+        // Chrome extension environment
+        return new Promise((resolve) => {
+          chrome.storage.local.get([key], (result) => {
+            resolve(result[key]);
+          });
+        });
+      } else {
+        // Fallback to localStorage for testing
+        const data = localStorage.getItem(key);
+        return data ? JSON.parse(data) : null;
+      }
+    } catch (error) {
+      console.error("Storage get error:", error);
+      return null;
+    }
+  }
+
+  async setStorageData(key, value) {
+    try {
+      if (
+        typeof chrome !== "undefined" &&
+        chrome.storage &&
+        chrome.storage.local
+      ) {
+        // Chrome extension environment
+        return new Promise((resolve) => {
+          chrome.storage.local.set({ [key]: value }, resolve);
+        });
+      } else {
+        // Fallback to localStorage for testing
+        localStorage.setItem(key, JSON.stringify(value));
+      }
+    } catch (error) {
+      console.error("Storage set error:", error);
+    }
+  }
+
+  async removeStorageData(key) {
+    try {
+      if (
+        typeof chrome !== "undefined" &&
+        chrome.storage &&
+        chrome.storage.local
+      ) {
+        // Chrome extension environment
+        return new Promise((resolve) => {
+          chrome.storage.local.remove([key], resolve);
+        });
+      } else {
+        // Fallback to localStorage for testing
+        localStorage.removeItem(key);
+      }
+    } catch (error) {
+      console.error("Storage remove error:", error);
+    }
+  }
+
+  // Authentication Methods
+  async checkAuthState() {
+    try {
+      const token = await this.getStorageData("factflow_token");
+      if (token) {
+        const user = await this.validateToken(token);
+        if (user) {
+          this.currentUser = user;
+          this.showMainInterface();
+          this.loadUserData();
+          this.loadInitialState();
+        } else {
+          await this.removeStorageData("factflow_token");
+          this.showAuthInterface();
+        }
+      } else {
+        this.showAuthInterface();
+      }
+    } catch (error) {
+      console.error("Auth check failed:", error);
+      this.showAuthInterface();
+    }
+  }
+
+  async validateToken(token) {
+    try {
+      const response = await fetch(`${this.apiBaseUrl}/users/me`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (response.ok) {
+        return await response.json();
+      }
+      return null;
+    } catch (error) {
+      console.error("Token validation failed:", error);
+      return null;
+    }
+  }
+
+  showAuthInterface() {
+    document.getElementById("auth-container").classList.remove("hidden");
+    document.getElementById("main-container").classList.add("hidden");
+  }
+
+  showMainInterface() {
+    document.getElementById("auth-container").classList.add("hidden");
+    document.getElementById("main-container").classList.remove("hidden");
   }
 
   setupEventListeners() {
+    this.setupAuthListeners();
+    this.setupMainAppListeners();
+  }
+
+  setupAuthListeners() {
+    // Auth tab switching
+    const authTabBtns = document.querySelectorAll(".auth-tab-btn");
+    const authTabContents = document.querySelectorAll(".auth-content");
+
+    authTabBtns.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const targetTab = btn.getAttribute("data-auth-tab");
+        this.switchAuthTab(targetTab, authTabBtns, authTabContents);
+      });
+    });
+
+    // Sign in form
+    document.getElementById("signin-form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      this.handleSignIn();
+    });
+
+    // Sign up form
+    document.getElementById("signup-form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      this.handleSignUp();
+    });
+
+    // Forgot password
+    document
+      .getElementById("forgot-password-btn")
+      .addEventListener("click", () => {
+        this.handleForgotPassword();
+      });
+
+    // Profile management
+    document
+      .getElementById("edit-profile-btn")
+      .addEventListener("click", () => {
+        this.openEditProfileModal();
+      });
+
+    document
+      .getElementById("change-password-btn")
+      .addEventListener("click", () => {
+        this.openChangePasswordModal();
+      });
+
+    document.getElementById("signout-btn").addEventListener("click", () => {
+      this.handleSignOut();
+    });
+
+    // Edit profile modal
+    document
+      .getElementById("edit-profile-close")
+      .addEventListener("click", () => {
+        this.closeModal("edit-profile-modal");
+      });
+
+    document
+      .getElementById("edit-profile-cancel")
+      .addEventListener("click", () => {
+        this.closeModal("edit-profile-modal");
+      });
+
+    document
+      .getElementById("edit-profile-save")
+      .addEventListener("click", () => {
+        this.saveProfileChanges();
+      });
+
+    // Change password modal
+    document
+      .getElementById("change-password-close")
+      .addEventListener("click", () => {
+        this.closeModal("change-password-modal");
+      });
+
+    document
+      .getElementById("change-password-cancel")
+      .addEventListener("click", () => {
+        this.closeModal("change-password-modal");
+      });
+
+    document
+      .getElementById("change-password-save")
+      .addEventListener("click", () => {
+        this.savePasswordChange();
+      });
+  }
+
+  setupMainAppListeners() {
     // Tab switching
     const tabBtns = document.querySelectorAll(".tab-btn");
     const tabContents = document.querySelectorAll(".tab-content");
@@ -83,26 +296,35 @@ class FactFlowApp {
       this.closeModal("help-modal");
     });
 
-    // Close modal when clicking outside
+    // Settings controls
+    document
+      .getElementById("threshold-slider")
+      .addEventListener("input", (e) => {
+        document.querySelector(".threshold-value").textContent =
+          e.target.value + "%";
+      });
+
+    // Close modals when clicking outside
     document.addEventListener("click", (e) => {
       if (e.target.classList.contains("modal")) {
         this.closeModal(e.target.id);
       }
     });
+  }
 
-    // Settings controls
-    const thresholdSlider = document.getElementById("threshold-slider");
-    thresholdSlider.addEventListener("input", (e) => {
-      document.querySelector(".threshold-value").textContent =
-        e.target.value + "%";
-    });
+  switchAuthTab(targetTab, authTabBtns, authTabContents) {
+    // Remove active class from all auth tabs
+    authTabBtns.forEach((b) => b.classList.remove("active"));
+    authTabContents.forEach((content) => content.classList.add("hidden"));
 
-    // ESC key to close modals
-    document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") {
-        this.closeAllModals();
-      }
-    });
+    // Add active class to clicked tab
+    document
+      .querySelector(`[data-auth-tab="${targetTab}"]`)
+      .classList.add("active");
+    document.getElementById(targetTab + "-auth-tab").classList.remove("hidden");
+
+    // Clear any previous messages
+    this.hideAuthMessage();
   }
 
   switchTab(targetTab, tabBtns, tabContents) {
@@ -115,291 +337,613 @@ class FactFlowApp {
     document.getElementById(targetTab + "-tab").classList.remove("hidden");
   }
 
-  async startAnalysis() {
-    this.setState("loading");
-    this.updateStatusIndicator("analyzing");
+  async handleSignIn() {
+    const email = document.getElementById("signin-email").value.trim();
+    const password = document.getElementById("signin-password").value;
+
+    if (!email || !password) {
+      this.showAuthMessage("Please fill in all fields", "error");
+      return;
+    }
+
+    const submitBtn = document.querySelector(
+      "#signin-form button[type='submit']"
+    );
+    this.setButtonLoading(submitBtn, true);
 
     try {
-      // Simulate loading steps
-      await this.simulateLoadingSteps();
+      const response = await fetch(`${this.apiBaseUrl}/users/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      });
 
-      // Make API call with actual webpage content
-      const analysisResult = await this.performAnalysis();
-      console.log("Analysis completed:", analysisResult);
+      const data = await response.json();
 
-      this.analysisData = analysisResult;
-      this.setState("results");
-      this.displayResults(analysisResult);
-      this.updateStatusIndicator("active");
+      if (response.ok) {
+        this.currentUser = data.user;
+        await this.setStorageData("factflow_token", data.access_token);
+        this.showAuthMessage("Sign in successful!", "success");
+
+        setTimeout(() => {
+          this.showMainInterface();
+          this.loadUserData();
+          this.loadInitialState();
+        }, 1000);
+      } else {
+        this.showAuthMessage(
+          data.detail || data.error || "Sign in failed",
+          "error"
+        );
+      }
     } catch (error) {
-      console.error("Analysis failed:", error);
-      this.handleAnalysisError(error);
-      this.updateStatusIndicator("error");
+      console.error("Sign in error:", error);
+      this.showAuthMessage("Network error. Please try again.", "error");
+    } finally {
+      this.setButtonLoading(submitBtn, false);
     }
   }
 
-  async simulateLoadingSteps() {
+  async handleSignUp() {
+    const username = document.getElementById("signup-name").value.trim();
+    const email = document.getElementById("signup-email").value.trim();
+    const password = document.getElementById("signup-password").value;
+    const confirmPassword = document.getElementById(
+      "signup-confirm-password"
+    ).value;
+
+    // Validation
+    if (!username || !email || !password || !confirmPassword) {
+      this.showAuthMessage("Please fill in all fields", "error");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      this.showAuthMessage("Passwords do not match", "error");
+      return;
+    }
+
+    if (password.length < 6) {
+      this.showAuthMessage("Password must be at least 6 characters", "error");
+      return;
+    }
+
+    if (!this.isValidEmail(email)) {
+      this.showAuthMessage("Please enter a valid email address", "error");
+      return;
+    }
+
+    const submitBtn = document.querySelector(
+      "#signup-form button[type='submit']"
+    );
+    this.setButtonLoading(submitBtn, true);
+
+    try {
+      const response = await fetch(`${this.apiBaseUrl}/users/register`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          username: username,
+          email: email,
+          password: password,
+          profile_photo: "",
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        this.showAuthMessage(
+          "Account created successfully! Please sign in.",
+          "success"
+        );
+
+        // Switch to sign in tab and pre-fill email
+        setTimeout(() => {
+          this.switchAuthTab(
+            "signin",
+            document.querySelectorAll(".auth-tab-btn"),
+            document.querySelectorAll(".auth-content")
+          );
+          document.getElementById("signin-email").value = email;
+        }, 1500);
+      } else {
+        this.showAuthMessage(
+          data.detail || data.error || "Sign up failed",
+          "error"
+        );
+      }
+    } catch (error) {
+      console.error("Sign up error:", error);
+      this.showAuthMessage("Network error. Please try again.", "error");
+    } finally {
+      this.setButtonLoading(submitBtn, false);
+    }
+  }
+
+  handleForgotPassword() {
+    const email = document.getElementById("signin-email").value.trim();
+
+    if (!email) {
+      this.showAuthMessage("Please enter your email address first", "error");
+      return;
+    }
+
+    if (!this.isValidEmail(email)) {
+      this.showAuthMessage("Please enter a valid email address", "error");
+      return;
+    }
+
+    // Show message (password reset would be handled by backend)
+    this.showAuthMessage(
+      "If an account exists with this email, you will receive a password reset link.",
+      "info"
+    );
+  }
+
+  async handleSignOut() {
+    if (confirm("Are you sure you want to sign out?")) {
+      try {
+        // Clear stored token
+        await this.removeStorageData("factflow_token");
+
+        // Reset user state
+        this.currentUser = null;
+        this.analysisData = null;
+        this.userVote = null;
+
+        // Show auth interface
+        this.showAuthInterface();
+        this.clearAuthForms();
+      } catch (error) {
+        console.error("Sign out error:", error);
+      }
+    }
+  }
+
+  loadUserData() {
+    if (!this.currentUser) return;
+
+    // Update user display
+    document.getElementById("user-name").textContent =
+      this.currentUser.username;
+    document.getElementById(
+      "user-level"
+    ).textContent = `Level ${this.currentUser.level}`;
+    document.getElementById("points-value").textContent =
+      this.currentUser.points;
+
+    // Update stats
+    document.getElementById("stat-verified").textContent = this.currentUser
+      .is_verified
+      ? "Yes"
+      : "No";
+    document.getElementById("stat-reputation").textContent =
+      this.currentUser.reputation;
+    document.getElementById("stat-streak").textContent =
+      this.currentUser.streak;
+
+    // Set user avatar (initials from username)
+    const avatar = document.getElementById("user-avatar");
+    avatar.textContent = this.currentUser.username.charAt(0).toUpperCase();
+
+    // Display badges if any
+    this.displayUserBadges(this.currentUser.badges || []);
+  }
+
+  displayUserBadges(badges) {
+    // Could add a badges display area in the profile tab
+    console.log("User badges:", badges);
+  }
+
+  loadInitialState() {
+    this.setState("analyze");
+    this.updateStatusIndicator("active");
+
+    // Switch to analysis tab by default
+    const tabBtns = document.querySelectorAll(".tab-btn");
+    const tabContents = document.querySelectorAll(".tab-content");
+    this.switchTab("analysis", tabBtns, tabContents);
+
+    // Auto-analyze if enabled
+    if (this.settings.autoAnalyze) {
+      setTimeout(() => {
+        this.startAnalysis();
+      }, 1000);
+    }
+  }
+
+  // Analysis Methods
+  async startAnalysis() {
+    if (this.currentState === "loading") return;
+
+    try {
+      this.setState("loading");
+      this.updateStatusIndicator("analyzing");
+
+      // Simulate analysis steps
+      await this.simulateAnalysisSteps();
+
+      // Get current page content for analysis
+      const pageContent = await this.getCurrentPageContent();
+
+      // Perform analysis using API
+      const results = await this.performAnalysis(pageContent);
+
+      this.analysisData = results;
+      this.setState("results");
+      this.displayResults(results);
+      this.updateStatusIndicator("active");
+
+      // Load existing votes for this article
+      await this.loadArticleVotes(results.article_id);
+    } catch (error) {
+      console.error("Analysis failed:", error);
+      this.updateStatusIndicator("error");
+      this.showAnalysisError(error.message);
+    }
+  }
+
+  async simulateAnalysisSteps() {
     const steps = document.querySelectorAll(".step");
 
     for (let i = 0; i < steps.length; i++) {
-      // Remove active from previous steps
+      // Remove active from all steps
       steps.forEach((step) => step.classList.remove("active"));
       // Add active to current step
       steps[i].classList.add("active");
+
       // Wait before next step
-      await this.delay(800 + Math.random() * 400);
+      await new Promise((resolve) => setTimeout(resolve, 800));
     }
   }
 
-  // NEW: Get actual webpage content using chrome.scripting API
   async getCurrentPageContent() {
     try {
-      const [tab] = await chrome.tabs.query({
-        active: true,
-        currentWindow: true,
-      });
+      if (typeof chrome !== "undefined" && chrome.tabs) {
+        // Chrome extension environment
+        const [tab] = await chrome.tabs.query({
+          active: true,
+          currentWindow: true,
+        });
 
-      if (!tab) {
-        throw new Error("No active tab found");
+        // Execute content script to get page text
+        const results = await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          function: () => {
+            // Extract main content text from the page
+            const content =
+              document.body.innerText || document.body.textContent || "";
+            return content.substring(0, 5000); // Limit to first 5000 characters
+          },
+        });
+
+        return results[0].result;
+      } else {
+        // Fallback for testing - return sample text
+        return "This is sample article content for testing the FactFlow extension. It contains various claims that need to be fact-checked for accuracy and reliability.";
       }
-
-      const results = await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        function: () => {
-          // This function runs in the actual webpage context
-          return {
-            text: document.body.innerText || document.body.textContent || "",
-            title: document.title || "",
-            url: window.location.href || "",
-            domain: window.location.hostname || "",
-            html: document.documentElement.outerHTML.substring(0, 5000), // Limit size
-          };
-        },
-      });
-
-      if (!results || !results[0] || !results[0].result) {
-        throw new Error("Failed to extract page content");
-      }
-
-      return results[0].result;
     } catch (error) {
-      console.error("Error getting page content:", error);
-
-      // Check if it's a permissions issue
-      if (error.message.includes("Cannot access")) {
-        throw new Error(
-          "Cannot access this page. Try refreshing the page or visiting a different website."
-        );
-      }
-
-      throw new Error("Could not access page content: " + error.message);
+      console.error("Failed to get page content:", error);
+      return "Unable to extract page content";
     }
   }
 
-  // UPDATED: Use actual webpage content instead of extension popup content
-  async performAnalysis() {
-    try {
-      // Get current active tab content (actual webpage, not extension popup)
-      const pageContent = await this.getCurrentPageContent();
-      console.log("Page content retrieved:", {
-        title: pageContent.title,
-        domain: pageContent.domain,
-        textLength: pageContent.text.length,
-      });
+  async performAnalysis(text) {
+    const token = await this.getStorageData("factflow_token");
 
-      // Validate content
-      if (!pageContent.text || pageContent.text.trim().length < 50) {
-        throw new Error(
-          "Page content is too short or empty. Please try a different page."
-        );
-      }
-
-      const response = await fetch("http://127.0.0.1:8050/analyze", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          text: pageContent.text.substring(0, 2000),
-          title: pageContent.title,
-          url: pageContent.url,
-          domain: pageContent.domain,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(
-          `API Error: ${response.status} - ${response.statusText}`
-        );
-      }
-
-      const data = await response.json();
-      console.log("Analysis results:", data);
-      return data;
-    } catch (error) {
-      console.error("Error during analysis:", error);
-
-      // Return mock data if API fails for development
-      if (error.message.includes("fetch")) {
-        console.warn("API unavailable, using mock data for development");
-        return this.getMockAnalysisData();
-      }
-
-      throw error;
-    }
-  }
-
-  // NEW: Mock data for development when API is unavailable
-  getMockAnalysisData() {
-    return {
-      score: 0.75,
-      final_score: 0.75,
-      community_score: 0.72,
-      title: "Analysis Complete",
-      subtitle: "Using mock data - API unavailable",
-      explanation:
-        "This is mock data returned because the API server is not available. The actual analysis would provide detailed fact-checking results based on AI analysis and community input.",
-      votes: {
-        up: 42,
-        down: 8,
+    const response = await fetch(`${this.apiBaseUrl}/analyze`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
       },
-    };
+      body: JSON.stringify({ text: text }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Analysis failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    // Get additional article data if available
+    if (data.article_id) {
+      try {
+        const articleResponse = await fetch(
+          `${this.apiBaseUrl}/article/${data.article_id}`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (articleResponse.ok) {
+          const articleData = await articleResponse.json();
+          // Merge the data
+          return {
+            ...data,
+            ai_score: articleData.ai_score * 100 || data.score * 100,
+            community_score:
+              articleData.community_score * 100 || data.community_score * 100,
+            combined_score:
+              articleData.combined_score * 100 || data.score * 100,
+            vote_count: articleData.vote_count || data.total_votes,
+          };
+        }
+      } catch (error) {
+        console.error("Failed to get article details:", error);
+      }
+    }
+
+    return data;
   }
 
-  displayResults(data) {
-    // Update status
-    document.getElementById("result-status-icon").textContent =
-      this.getStatusIcon(data.final_score || data.score);
-    document.getElementById("result-status-title").textContent =
-      data.title || "Article analyzed";
-    document.getElementById("result-status-subtitle").textContent =
-      data.subtitle || "Analysis complete";
+  async loadArticleVotes(articleId) {
+    if (!articleId) return;
+
+    try {
+      const token = await this.getStorageData("factflow_token");
+      const response = await fetch(
+        `${this.apiBaseUrl}/article/${articleId}/votes`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (response.ok) {
+        const voteData = await response.json();
+        // Update vote display with actual data
+        this.updateVoteDisplay(voteData);
+      }
+    } catch (error) {
+      console.error("Failed to load article votes:", error);
+    }
+  }
+
+  updateVoteDisplay(voteData) {
+    // Update vote counts based on API response
+    if (typeof voteData === "string") {
+      // If it's a string response, parse it or handle accordingly
+      console.log("Vote data:", voteData);
+    } else if (voteData.positive !== undefined) {
+      document.getElementById("vote-up-count").textContent = voteData.positive;
+      document.getElementById("vote-down-count").textContent =
+        voteData.negative;
+    }
+  }
+
+  displayResults(results) {
+    // Use combined_score or score for final score
+    const finalScore = results.combined_score || results.score || 0;
+    const aiScore = results.ai_score || results.score || 0;
+    const communityScore = results.community_score || 0;
+
+    // Update status based on combined score
+    const statusIcon = document.getElementById("result-status-icon");
+    const statusTitle = document.getElementById("result-status-title");
+    const statusSubtitle = document.getElementById("result-status-subtitle");
+
+    if (finalScore >= 70) {
+      statusIcon.textContent = "🟢";
+      statusTitle.textContent = "High Reliability";
+      statusSubtitle.textContent = "This source appears trustworthy";
+    } else if (finalScore >= 40) {
+      statusIcon.textContent = "🟡";
+      statusTitle.textContent = "Moderate Reliability";
+      statusSubtitle.textContent = "Use caution, verify claims";
+    } else {
+      statusIcon.textContent = "🔴";
+      statusTitle.textContent = "Low Reliability";
+      statusSubtitle.textContent = "High risk of misinformation";
+    }
 
     // Update scores with animation
-    this.animateScore("ai-score", data.score || 0);
-    this.animateScore("community-score", data.community_score || 0);
-    this.animateScore("final-score", data.final_score || data.score || 0);
+    this.animateScore("ai-score", aiScore);
+    this.animateScore("community-score", communityScore);
+    this.animateScore("final-score", finalScore);
 
-    // Update explanation
+    // Update explanation - format as justified paragraphs
     this.displayExplanation(
-      data.explanation || "No detailed explanation available."
+      results.explanation ||
+        results.label ||
+        "No detailed explanation available"
     );
 
     // Update vote counts
-    document.getElementById("vote-up-count").textContent = data.votes?.up || 0;
+    document.getElementById("vote-up-count").textContent =
+      results.positive || 0;
     document.getElementById("vote-down-count").textContent =
-      data.votes?.down || 0;
+      results.negative || 0;
   }
 
-  animateScore(scoreType, value) {
-    const fillElement = document.getElementById(`${scoreType}-fill`);
-    const valueElement = document.getElementById(`${scoreType}-value`);
-    const colorClass = this.getScoreColorClass(value);
+  animateScore(scorePrefix, value) {
+    const fillEl = document.getElementById(scorePrefix + "-fill");
+    const valueEl = document.getElementById(scorePrefix + "-value");
 
-    // Remove existing color classes
-    fillElement.classList.remove("green", "yellow", "red");
-    fillElement.classList.add(colorClass);
+    // Determine color based on value
+    const colorClass = value >= 70 ? "green" : value >= 40 ? "yellow" : "red";
+    fillEl.className = `score-fill ${colorClass}`;
 
-    // Animate width
+    // Animate the fill
     setTimeout(() => {
-      fillElement.style.width = `${value * 100}%`;
-      valueElement.textContent = `${Math.round(value * 100)}%`;
+      fillEl.style.width = value + "%";
     }, 100);
+
+    // Animate the number
+    let current = 0;
+    const increment = value / 30; // 30 frames
+    const timer = setInterval(() => {
+      current += increment;
+      if (current >= value) {
+        current = value;
+        clearInterval(timer);
+      }
+      valueEl.textContent = Math.round(current) + "%";
+    }, 30);
   }
 
-  getScoreColorClass(score) {
-    const percentage = score * 100;
-    if (percentage >= 70) return "green";
-    if (percentage >= 40) return "yellow";
-    return "red";
-  }
-
-  getStatusIcon(score) {
-    const percentage = score * 100;
-    if (percentage >= 70) return "🟢";
-    if (percentage >= 40) return "🟡";
-    return "🔴";
-  }
-
-  displayExplanation(details) {
+  displayExplanation(explanation) {
     const container = document.getElementById("explanation-items");
     container.innerHTML = "";
 
-    const text = document.createElement("small");
-    text.style.display = "block";
-    text.style.textAlign = "justify";
-    text.style.lineHeight = "1.4";
-    text.style.color = "#666";
-    text.textContent = details;
-    container.appendChild(text);
+    if (typeof explanation === "string") {
+      // Create a justified paragraph for the explanation
+      const div = document.createElement("div");
+      div.className = "explanation-paragraph";
+      div.style.textAlign = "justify";
+      div.style.lineHeight = "1.5";
+      div.style.marginBottom = "10px";
+      div.style.fontSize = "0.8em";
+      div.style.padding = "10px";
+      div.style.backgroundColor = "#f8f9fa";
+      div.style.borderRadius = "6px";
+      div.style.border = "1px solid #e9ecef";
+      div.textContent = explanation;
+      container.appendChild(div);
+    } else if (Array.isArray(explanation)) {
+      // Handle array of explanation items (legacy format)
+      explanation.forEach((item) => {
+        const div = document.createElement("div");
+        div.className = `explanation-item ${item.type}`;
+
+        const icon =
+          item.type === "positive" ? "✓" : item.type === "warning" ? "⚠" : "✗";
+
+        div.innerHTML = `
+          <span class="explanation-icon">${icon}</span>
+          <span>${item.text}</span>
+        `;
+
+        container.appendChild(div);
+      });
+    }
   }
 
-  handleVote(voteType) {
+  showAnalysisError(message) {
+    const container = document.getElementById("explanation-items");
+    container.innerHTML = `
+      <div class="explanation-item error">
+        <span class="explanation-icon">✗</span>
+        <span>Analysis failed: ${message}</span>
+      </div>
+    `;
+  }
+
+  // Vote handling
+  async handleVote(voteType) {
+    if (!this.analysisData || !this.analysisData.article_id) {
+      console.error("No article to vote on");
+      return;
+    }
+
+    const previousVote = this.userVote;
+
+    if (this.userVote === voteType) {
+      // User is removing their vote
+      this.userVote = null;
+    } else {
+      this.userVote = voteType;
+    }
+
+    this.updateVoteButtons();
+
+    // Submit vote to API
+    try {
+      await this.submitVote(voteType, this.analysisData.article_id);
+
+      // Update local counts optimistically
+      this.updateLocalVoteCounts(voteType, previousVote);
+    } catch (error) {
+      console.error("Vote submission failed:", error);
+      // Revert vote on failure
+      this.userVote = previousVote;
+      this.updateVoteButtons();
+    }
+  }
+
+  updateVoteButtons() {
     const upBtn = document.getElementById("vote-up");
     const downBtn = document.getElementById("vote-down");
 
-    // Remove previous vote styling
+    // Reset classes
     upBtn.classList.remove("voted");
     downBtn.classList.remove("voted");
 
-    // Handle vote logic
-    if (this.userVote === voteType) {
-      // User clicked same vote - remove vote
-      this.userVote = null;
-      this.updateVoteCount(voteType, -1);
-    } else {
-      // New vote or changing vote
-      if (this.userVote) {
-        // Remove previous vote count
-        this.updateVoteCount(this.userVote, -1);
-      }
-
-      this.userVote = voteType;
-      this.updateVoteCount(voteType, 1);
-
-      // Add voted styling
-      if (voteType === "up") {
-        upBtn.classList.add("voted");
-      } else {
-        downBtn.classList.add("voted");
-      }
-    }
-
-    // Send vote to backend
-    this.sendVoteToBackend(voteType);
-  }
-
-  updateVoteCount(voteType, change) {
-    const countElement = document.getElementById(`vote-${voteType}-count`);
-    const currentCount = parseInt(countElement.textContent);
-    countElement.textContent = Math.max(0, currentCount + change);
-  }
-
-  async sendVoteToBackend(voteType) {
-    try {
-      console.log("Sending vote:", voteType);
-
-      // Implement actual API call here when ready
-      const response = await fetch("http://127.0.0.1:8050/vote", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          article_id: this.getCurrentArticleId(),
-          vote: voteType === "up" ? 1 : -1,
-          user_id: this.getCurrentUserId(),
-        }),
-      });
-
-      if (response.ok) {
-        console.log("Vote sent successfully");
-      }
-    } catch (error) {
-      console.error("Error sending vote:", error);
+    // Add voted class to active vote
+    if (this.userVote === "up") {
+      upBtn.classList.add("voted");
+    } else if (this.userVote === "down") {
+      downBtn.classList.add("voted");
     }
   }
 
+  async submitVote(voteType, articleId) {
+    const token = await this.getStorageData("factflow_token");
+
+    // Note: The API specification doesn't include a vote endpoint
+    // This would need to be added to the backend API
+    const voteData = {
+      article_id: articleId,
+      vote_type: voteType === "up" ? "positive" : "negative",
+    };
+
+    // For now, just log the vote since the API endpoint isn't specified
+    console.log("Would submit vote:", voteData);
+
+    // If there was a vote endpoint, it would look like:
+    // const response = await fetch(`${this.apiBaseUrl}/article/${articleId}/vote`, {
+    //   method: "POST",
+    //   headers: {
+    //     "Content-Type": "application/json",
+    //     "Authorization": `Bearer ${token}`,
+    //   },
+    //   body: JSON.stringify(voteData),
+    // });
+  }
+
+  updateLocalVoteCounts(voteType, previousVote) {
+    const upCountEl = document.getElementById("vote-up-count");
+    const downCountEl = document.getElementById("vote-down-count");
+
+    let upCount = parseInt(upCountEl.textContent);
+    let downCount = parseInt(downCountEl.textContent);
+
+    // Remove previous vote
+    if (previousVote === "up") {
+      upCount = Math.max(0, upCount - 1);
+    } else if (previousVote === "down") {
+      downCount = Math.max(0, downCount - 1);
+    }
+
+    // Add new vote
+    if (this.userVote === "up") {
+      upCount += 1;
+    } else if (this.userVote === "down") {
+      downCount += 1;
+    }
+
+    upCountEl.textContent = upCount;
+    downCountEl.textContent = downCount;
+  }
+
+  resetToAnalyzeState() {
+    this.setState("analyze");
+    this.userVote = null;
+    this.analysisData = null;
+    this.updateVoteButtons();
+  }
+
+  // State Management
   setState(newState) {
     this.currentState = newState;
 
@@ -409,93 +953,145 @@ class FactFlowApp {
     document.getElementById("results-state").classList.add("hidden");
 
     // Show current state
-    document.getElementById(`${newState}-state`).classList.remove("hidden");
-  }
-
-  resetToAnalyzeState() {
-    this.setState("analyze");
-    this.updateStatusIndicator("inactive");
-    this.analysisData = null;
-    this.userVote = null;
-
-    // Reset vote button styling
-    document.getElementById("vote-up").classList.remove("voted");
-    document.getElementById("vote-down").classList.remove("voted");
+    document.getElementById(newState + "-state").classList.remove("hidden");
   }
 
   updateStatusIndicator(status) {
     const indicator = document.getElementById("status-indicator");
-    indicator.classList.remove("active", "analyzing", "error");
+    indicator.className = "status-indicator " + status;
+  }
 
-    if (status !== "inactive") {
-      indicator.classList.add(status);
+  // Profile Management
+  openEditProfileModal() {
+    // Pre-fill form with current user data
+    document.getElementById("edit-display-name").value =
+      this.currentUser.username;
+    document.getElementById("edit-email").value = this.currentUser.email;
+
+    this.openModal("edit-profile-modal");
+  }
+
+  openChangePasswordModal() {
+    // Clear password form
+    document.getElementById("change-password-form").reset();
+    this.openModal("change-password-modal");
+  }
+
+  async saveProfileChanges() {
+    const newUsername = document
+      .getElementById("edit-display-name")
+      .value.trim();
+
+    if (!newUsername) {
+      alert("Display name is required");
+      return;
+    }
+
+    try {
+      const token = await this.getStorageData("factflow_token");
+      const response = await fetch(`${this.apiBaseUrl}/users/me`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          username: newUsername,
+          profile_photo: this.currentUser.profile_photo || "",
+        }),
+      });
+
+      if (response.ok) {
+        const updatedUser = await response.json();
+        this.currentUser = updatedUser;
+        this.loadUserData();
+        this.closeModal("edit-profile-modal");
+        // Show success message
+        alert("Profile updated successfully");
+      } else {
+        const error = await response.json();
+        alert(error.detail || "Failed to update profile");
+      }
+    } catch (error) {
+      console.error("Profile update failed:", error);
+      alert("Network error. Please try again.");
     }
   }
 
-  handleAnalysisError(error) {
-    console.error("Analysis error:", error);
-    this.setState("analyze");
+  async savePasswordChange() {
+    const currentPassword = document.getElementById("current-password").value;
+    const newPassword = document.getElementById("new-password").value;
+    const confirmPassword = document.getElementById(
+      "confirm-new-password"
+    ).value;
 
-    // Show error message
-    const btn = document.getElementById("analysis-btn");
-    const originalText = btn.querySelector(".btn-text").textContent;
-
-    let errorMessage = "Analysis failed - Try again";
-
-    // Customize error message based on error type
-    if (error.message.includes("Cannot access")) {
-      errorMessage = "Cannot access this page";
-    } else if (error.message.includes("too short")) {
-      errorMessage = "Page content too short";
-    } else if (error.message.includes("API Error")) {
-      errorMessage = "Server error - Try again";
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      alert("Please fill in all fields");
+      return;
     }
 
-    btn.querySelector(".btn-text").textContent = errorMessage;
-    btn.style.backgroundColor = "#f44336";
+    if (newPassword !== confirmPassword) {
+      alert("New passwords do not match");
+      return;
+    }
 
-    setTimeout(() => {
-      btn.querySelector(".btn-text").textContent = originalText;
-      btn.style.backgroundColor = "";
-    }, 4000);
+    if (newPassword.length < 6) {
+      alert("Password must be at least 6 characters");
+      return;
+    }
+
+    try {
+      // Note: Password change endpoint not specified in API
+      // This would typically be a separate endpoint like /users/me/password
+      this.closeModal("change-password-modal");
+      alert(
+        "Password change functionality would be implemented with backend support"
+      );
+    } catch (error) {
+      console.error("Password change failed:", error);
+      alert("Failed to update password");
+    }
   }
 
-  // Modal functionality
+  // Modal Management
   openModal(modalId) {
     document.getElementById(modalId).classList.remove("hidden");
-    document.body.style.overflow = "hidden";
   }
 
   closeModal(modalId) {
     document.getElementById(modalId).classList.add("hidden");
-    document.body.style.overflow = "";
   }
 
-  closeAllModals() {
-    const modals = document.querySelectorAll(".modal");
-    modals.forEach((modal) => {
-      modal.classList.add("hidden");
-    });
-    document.body.style.overflow = "";
+  // Settings Management
+  async loadSettings() {
+    try {
+      const storedSettings = await this.getStorageData("factflow_settings");
+      if (storedSettings) {
+        this.settings = { ...this.settings, ...storedSettings };
+      }
+
+      // Update UI elements if they exist
+      setTimeout(() => {
+        const autoAnalyzeEl = document.getElementById("auto-analyze");
+        const showNotificationsEl =
+          document.getElementById("show-notifications");
+        const thresholdSliderEl = document.getElementById("threshold-slider");
+        const thresholdValueEl = document.querySelector(".threshold-value");
+
+        if (autoAnalyzeEl) autoAnalyzeEl.checked = this.settings.autoAnalyze;
+        if (showNotificationsEl)
+          showNotificationsEl.checked = this.settings.showNotifications;
+        if (thresholdSliderEl)
+          thresholdSliderEl.value = this.settings.threshold;
+        if (thresholdValueEl)
+          thresholdValueEl.textContent = this.settings.threshold + "%";
+      }, 100);
+    } catch (error) {
+      console.error("Failed to load settings:", error);
+    }
   }
 
-  // Settings functionality
-  loadSettings() {
-    // Load from chrome.storage in a real extension
-    // For now, use defaults
-    this.applySettings();
-  }
-
-  applySettings() {
-    document.getElementById("auto-analyze").checked = this.settings.autoAnalyze;
-    document.getElementById("show-notifications").checked =
-      this.settings.showNotifications;
-    document.getElementById("threshold-slider").value = this.settings.threshold;
-    document.querySelector(".threshold-value").textContent =
-      this.settings.threshold + "%";
-  }
-
-  saveSettings() {
+  async saveSettings() {
     this.settings.autoAnalyze = document.getElementById("auto-analyze").checked;
     this.settings.showNotifications =
       document.getElementById("show-notifications").checked;
@@ -503,80 +1099,230 @@ class FactFlowApp {
       document.getElementById("threshold-slider").value
     );
 
-    // Save to chrome.storage in a real extension
-    // chrome.storage.sync.set({ factflowSettings: this.settings });
+    try {
+      await this.setStorageData("factflow_settings", this.settings);
+      console.log("Settings saved:", this.settings);
+      this.closeModal("settings-modal");
 
-    console.log("Settings saved:", this.settings);
-    this.closeModal("settings-modal");
-    this.showSettingsSavedFeedback();
+      // Show success feedback
+      this.showTemporaryMessage("Settings saved successfully", "success");
+    } catch (error) {
+      console.error("Failed to save settings:", error);
+      alert("Failed to save settings");
+    }
   }
 
-  resetSettings() {
+  async resetSettings() {
     this.settings = {
       autoAnalyze: true,
       showNotifications: false,
       threshold: 70,
     };
 
-    this.applySettings();
+    try {
+      await this.setStorageData("factflow_settings", this.settings);
+      this.loadSettings();
+      this.showTemporaryMessage("Settings reset to defaults", "info");
+    } catch (error) {
+      console.error("Failed to reset settings:", error);
+    }
   }
 
-  showSettingsSavedFeedback() {
-    const saveBtn = document.getElementById("settings-save");
-    const originalText = saveBtn.textContent;
+  // Utility Methods
+  isValidEmail(email) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  }
 
-    saveBtn.textContent = "Saved!";
-    saveBtn.style.backgroundColor = "#4CAF50";
+  setButtonLoading(button, loading) {
+    if (loading) {
+      button.classList.add("loading");
+      button.disabled = true;
+      const originalText = button.textContent;
+      button.setAttribute("data-original-text", originalText);
+      button.textContent = "Loading...";
+    } else {
+      button.classList.remove("loading");
+      button.disabled = false;
+      const originalText = button.getAttribute("data-original-text");
+      if (originalText) {
+        button.textContent = originalText;
+        button.removeAttribute("data-original-text");
+      }
+    }
+  }
 
+  showAuthMessage(message, type) {
+    const messageEl = document.getElementById("auth-message");
+    const textEl = messageEl.querySelector(".message-text");
+
+    messageEl.className = `auth-message ${type}`;
+    textEl.textContent = message;
+    messageEl.classList.remove("hidden");
+
+    // Auto-hide after 5 seconds
     setTimeout(() => {
-      saveBtn.textContent = originalText;
-      saveBtn.style.backgroundColor = "";
-    }, 1500);
+      this.hideAuthMessage();
+    }, 5000);
   }
 
-  loadInitialState() {
-    // Check if we should auto-analyze
-    if (this.settings.autoAnalyze && this.isValidPage()) {
-      // Auto-analyze after a short delay
+  hideAuthMessage() {
+    const messageEl = document.getElementById("auth-message");
+    messageEl.classList.add("hidden");
+  }
+
+  showTemporaryMessage(message, type) {
+    // Create temporary message element
+    const messageEl = document.createElement("div");
+    messageEl.className = `temporary-message ${type}`;
+    messageEl.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 10px 20px;
+      border-radius: 6px;
+      color: white;
+      font-weight: 500;
+      z-index: 10000;
+      transition: opacity 0.3s ease;
+    `;
+
+    if (type === "success") {
+      messageEl.style.backgroundColor = "#28a745";
+    } else if (type === "error") {
+      messageEl.style.backgroundColor = "#dc3545";
+    } else {
+      messageEl.style.backgroundColor = "#17a2b8";
+    }
+
+    messageEl.textContent = message;
+    document.body.appendChild(messageEl);
+
+    // Remove after 3 seconds
+    setTimeout(() => {
+      messageEl.style.opacity = "0";
+      setTimeout(() => {
+        if (messageEl.parentNode) {
+          messageEl.parentNode.removeChild(messageEl);
+        }
+      }, 300);
+    }, 3000);
+  }
+
+  clearAuthForms() {
+    document.getElementById("signin-form").reset();
+    document.getElementById("signup-form").reset();
+    this.hideAuthMessage();
+  }
+
+  // Error Handling
+  handleApiError(error, response) {
+    if (response && response.status === 401) {
+      // Unauthorized - token might be expired
+      this.handleSignOut();
+      return;
+    }
+
+    console.error("API Error:", error);
+    throw error;
+  }
+
+  // Photo Upload (for future implementation)
+  async uploadProfilePhoto(file) {
+    try {
+      const token = await this.getStorageData("factflow_token");
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch(`${this.apiBaseUrl}/users/me/upload-photo`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      if (response.ok) {
+        // Refresh user data
+        const updatedUser = await this.getCurrentUser();
+        if (updatedUser) {
+          this.currentUser = updatedUser;
+          this.loadUserData();
+        }
+        return true;
+      } else {
+        throw new Error("Upload failed");
+      }
+    } catch (error) {
+      console.error("Photo upload failed:", error);
+      throw error;
+    }
+  }
+
+  async getCurrentUser() {
+    try {
+      const token = await this.getStorageData("factflow_token");
+      const response = await fetch(`${this.apiBaseUrl}/users/me`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        return await response.json();
+      }
+      return null;
+    } catch (error) {
+      console.error("Failed to get current user:", error);
+      return null;
+    }
+  }
+
+  // Auto-analysis for new pages
+  async handlePageChange() {
+    if (
+      this.settings.autoAnalyze &&
+      this.currentUser &&
+      this.currentState === "analyze"
+    ) {
       setTimeout(() => {
         this.startAnalysis();
-      }, 1000);
+      }, 2000); // Delay to allow page to load
     }
   }
 
-  isValidPage() {
-    // In a real extension, you might check the URL or page type
-    return true;
+  // Network status handling
+  handleNetworkError() {
+    this.updateStatusIndicator("error");
+    this.showTemporaryMessage("Network connection lost", "error");
   }
 
-  // Utility functions
-  delay(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  getCurrentArticleId() {
-    // Generate article identifier based on URL
-    try {
-      const url = this.analysisData?.url || window.location.href;
-      return btoa(url).substring(0, 12);
-    } catch {
-      return "demo_article";
-    }
-  }
-
-  getCurrentUserId() {
-    // In a real extension, you'd get this from storage or generate/store it
-    return "user_" + Math.random().toString(36).substring(2, 8);
+  handleNetworkRestore() {
+    this.updateStatusIndicator("active");
+    this.showTemporaryMessage("Connection restored", "success");
   }
 }
 
 // Initialize the app when DOM is loaded
-document.addEventListener("DOMContentLoaded", function () {
-  // Check if we have the necessary Chrome APIs
-  if (typeof chrome !== "undefined" && chrome.tabs && chrome.scripting) {
-    window.factFlowApp = new FactFlowApp();
-  } else {
-    console.error("Chrome extension APIs not available");
-    // You might want to show an error message to the user here
+document.addEventListener("DOMContentLoaded", () => {
+  const app = new FactFlowApp();
+
+  // Listen for page changes if in extension environment
+  if (typeof chrome !== "undefined" && chrome.tabs) {
+    chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+      if (changeInfo.status === "complete" && tab.active) {
+        app.handlePageChange();
+      }
+    });
   }
+
+  // Handle network status
+  window.addEventListener("online", () => app.handleNetworkRestore());
+  window.addEventListener("offline", () => app.handleNetworkError());
 });
+
+// Export for testing
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = FactFlowApp;
+}
